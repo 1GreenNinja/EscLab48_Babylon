@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Level 1 - Security Cell Block - Map</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            color: #eee;
+        }
+        h1 { color: #4af; text-shadow: 0 0 20px rgba(68, 170, 255, 0.5); margin-bottom: 10px; }
+        h2 { color: #888; font-weight: normal; margin-bottom: 20px; }
+        #mapCanvas { border: 3px solid #4af; border-radius: 10px; box-shadow: 0 0 30px rgba(68, 170, 255, 0.3); }
+        .legend { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 10px; max-width: 1200px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; }
+        .legend-color { width: 20px; height: 20px; border-radius: 3px; border: 1px solid #666; }
+        .objectives { margin-top: 20px; padding: 15px; background: rgba(255, 100, 100, 0.1); border: 1px solid #f55; border-radius: 10px; max-width: 1200px; }
+        .objectives h3 { color: #f55; margin-bottom: 10px; }
+        .objectives ul { list-style: none; padding-left: 10px; columns: 2; }
+        .objectives li { margin: 5px 0; padding-left: 20px; position: relative; }
+        .objectives li::before { content: ">"; position: absolute; left: 0; color: #f55; }
+        .codes { margin-top: 20px; padding: 15px; background: rgba(100, 255, 100, 0.1); border: 1px solid #5f5; border-radius: 10px; }
+        .codes h3 { color: #5f5; margin-bottom: 10px; }
+        .codes span { display: inline-block; background: #333; padding: 3px 8px; margin: 3px; border-radius: 3px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>LEVEL 1: SECURITY CELL BLOCK</h1>
+    <h2>NexaGen Research Facility - Basement Level</h2>
+    
+    <canvas id="mapCanvas" width="1200" height="700"></canvas>
+    
+    <div class="legend">
+        <div class="legend-item"><div class="legend-color" style="background: #4a6fa5;"></div> Jake's Cell</div>
+        <div class="legend-item"><div class="legend-color" style="background: #5a4a6f;"></div> Other Cells</div>
+        <div class="legend-item"><div class="legend-color" style="background: #6b5b45;"></div> Hallway</div>
+        <div class="legend-item"><div class="legend-color" style="background: #4a5a4a;"></div> Armory</div>
+        <div class="legend-item"><div class="legend-color" style="background: #5a6a5a;"></div> Guard Station</div>
+        <div class="legend-item"><div class="legend-color" style="background: #6a5a5a;"></div> Medical Bay</div>
+        <div class="legend-item"><div class="legend-color" style="background: #5a5a6a;"></div> Storage</div>
+        <div class="legend-item"><div class="legend-color" style="background: #3a4a5a;"></div> Elevator</div>
+        <div class="legend-item"><div class="legend-color" style="background: #ff6b6b;"></div> Bars (bendable)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #ffd93d;"></div> Interactable</div>
+        <div class="legend-item"><div class="legend-color" style="background: #6bcb77;"></div> Secret Passage</div>
+    </div>
+
+    <div class="objectives">
+        <h3>OBJECTIVES</h3>
+        <ul>
+            <li>Wake up and get off the bed</li>
+            <li>Use the computer terminal to unlock cell door</li>
+            <li>Bend the prison bars to escape cell</li>
+            <li>Explore the hallway - check all rooms</li>
+            <li>Visit Medical Bay for health supplies</li>
+            <li>Raid the Armory for weapons</li>
+            <li>Check Storage for keycard/items</li>
+            <li>Avoid or defeat guards</li>
+            <li>Find the secret stairway in Cell 4</li>
+            <li>Take elevator to Level 2</li>
+        </ul>
+    </div>
+
+    <div class="codes">
+        <h3>DOOR CODES</h3>
+        <span>SARAH</span> <span>ESCAPE</span> <span>FREEDOM</span> <span>1234</span>
+        <span>0000</span> <span>JAKE</span> <span>NEXAGEN</span> <span>7412</span>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('mapCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const COLORS = {
+            background: '#1a1a2e', wall: '#666', jakeCell: '#4a6fa5', otherCell: '#5a4a6f',
+            hallway: '#6b5b45', armory: '#4a5a4a', guardStation: '#5a6a5a', medical: '#6a5a5a',
+            storage: '#5a5a6a', elevator: '#3a4a5a', bars: '#ff6b6b', interactive: '#ffd93d',
+            secret: '#6bcb77', text: '#fff', textDim: '#aaa', danger: '#ff4444'
+        };
+
+        ctx.fillStyle = COLORS.background;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Subtle grid
+        ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+        ctx.lineWidth = 1;
+        for (var x = 0; x < canvas.width; x += 50) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
+        for (var y = 0; y < canvas.height; y += 50) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
+
+        function drawRoom(x, y, w, h, color, label, labelSize) {
+            labelSize = labelSize || 12;
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, w, h);
+            ctx.strokeStyle = COLORS.wall;
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x, y, w, h);
+            if (label) {
+                ctx.fillStyle = COLORS.text;
+                ctx.font = 'bold ' + labelSize + 'px Segoe UI';
+                ctx.textAlign = 'center';
+                ctx.fillText(label, x + w/2, y + h/2 + 4);
+            }
+        }
+
+        function drawIcon(x, y, text, label, color) {
+            color = color || COLORS.interactive;
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(x, y, 15, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#000';
+            ctx.font = 'bold 9px Segoe UI';
+            ctx.textAlign = 'center';
+            ctx.fillText(text, x, y + 3);
+            if (label) {
+                ctx.fillStyle = COLORS.textDim;
+                ctx.font = '8px Segoe UI';
+                ctx.fillText(label, x, y + 28);
+            }
+        }
+
+        function drawBars(x, y, count, bent, horizontal) {
+            ctx.strokeStyle = COLORS.bars;
+            ctx.lineWidth = 3;
+            for (var i = 0; i < count; i++) {
+                ctx.beginPath();
+                if (horizontal) {
+                    var by = y + i * 10;
+                    if (bent && i >= 1 && i <= 2) {
+                        ctx.moveTo(x, by);
+                        ctx.quadraticCurveTo(x + 15, by + 5, x + 30, by + 8);
+                    } else {
+                        ctx.moveTo(x, by);
+                        ctx.lineTo(x + 30, by);
+                    }
+                } else {
+                    var bx = x + i * 10;
+                    if (bent && i >= 1 && i <= 2) {
+                        ctx.moveTo(bx, y);
+                        ctx.quadraticCurveTo(bx + 5, y + 15, bx + 8, y + 30);
+                    } else {
+                        ctx.moveTo(bx, y);
+                        ctx.lineTo(bx, y + 30);
+                    }
+                }
+                ctx.stroke();
+            }
+        }
+
+        function drawDoor(x, y, w, h) {
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(x, y, w, h);
+            ctx.strokeStyle = '#5a3510';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, w, h);
+            ctx.fillStyle = '#ffd700';
+            ctx.beginPath();
+            ctx.arc(x + w - 5, y + h/2, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawArrow(fromX, fromY, toX, toY, color) {
+            color = color || '#4af';
+            var headLen = 8;
+            var angle = Math.atan2(toY - fromY, toX - fromX);
+            ctx.strokeStyle = color;
+            ctx.fillStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(fromX, fromY);
+            ctx.lineTo(toX, toY);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(toX, toY);
+            ctx.lineTo(toX - headLen * Math.cos(angle - Math.PI/6), toY - headLen * Math.sin(angle - Math.PI/6));
+            ctx.lineTo(toX - headLen * Math.cos(angle + Math.PI/6), toY - headLen * Math.sin(angle + Math.PI/6));
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // ===== COMPASS =====
+        ctx.fillStyle = COLORS.text;
+        ctx.font = 'bold 12px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.fillText('N', 1150, 30);
+        drawArrow(1150, 50, 1150, 40, '#fff');
+
+        // ===== CELL BLOCK (LEFT SIDE - VERTICAL STACK) =====
+        
+        // JAKE'S CELL (top)
+        drawRoom(30, 50, 140, 120, COLORS.jakeCell, '', 12);
+        ctx.fillStyle = COLORS.text;
+        ctx.font = 'bold 11px Segoe UI';
+        ctx.fillText("JAKE'S", 100, 70);
+        ctx.fillText("CELL", 100, 85);
+        
+        // Bed
+        ctx.fillStyle = '#5a7a9a';
+        ctx.fillRect(45, 95, 40, 30);
+        ctx.fillStyle = '#fff';
+        ctx.font = '8px Segoe UI';
+        ctx.fillText('BED', 65, 113);
+        
+        // Jake start
+        ctx.fillStyle = '#ff0';
+        ctx.font = 'bold 9px Segoe UI';
+        ctx.fillText('* START *', 65, 145);
+        
+        // Terminal, Toilet, Sink
+        drawIcon(130, 80, 'PC', '');
+        drawIcon(50, 145, 'WC', '');
+        drawIcon(90, 145, '~~', '');
+        
+        // Bars (right side of Jake's cell - exit to hallway)
+        drawBars(170, 80, 5, true, false);
+        
+        // CELL 2 (abandoned)
+        drawRoom(30, 200, 140, 100, COLORS.otherCell, '', 11);
+        ctx.fillStyle = COLORS.text;
+        ctx.font = 'bold 10px Segoe UI';
+        ctx.fillText('CELL 2', 100, 230);
+        ctx.fillStyle = COLORS.textDim;
+        ctx.font = '8px Segoe UI';
+        ctx.fillText('(abandoned)', 100, 245);
+        drawBars(170, 230, 5, true, false);
+        
+        // CELL 3 (empty)
+        drawRoom(30, 330, 140, 100, COLORS.otherCell, '', 11);
+        ctx.fillStyle = COLORS.text;
+        ctx.font = 'bold 10px Segoe UI';
+        ctx.fillText('CELL 3', 100, 365);
+        ctx.fillStyle = COLORS.textDim;
+        ctx.font = '8px Segoe UI';
+        ctx.fillText('(empty)', 100, 380);
+        drawBars(170, 360, 5, false, false);
+
+        // CELL 4 (skeleton + SECRET STAIRWAY on LEFT)
+        drawRoom(30, 460, 140, 100, COLORS.otherCell, '', 11);
+        ctx.fillStyle = COLORS.text;
+        ctx.font = 'bold 10px Segoe UI';
+        ctx.fillText('CELL 4', 100, 495);
+        ctx.fillStyle = COLORS.danger;
+        ctx.font = '8px Segoe UI';
+        ctx.fillText('(skeleton)', 100, 510);
+        drawBars(170, 490, 5, false, false);
+        
+        // SECRET STAIRWAY (LEFT side of Cell 4)
+        ctx.fillStyle = COLORS.secret;
+        ctx.fillRect(5, 480, 25, 60);
+        ctx.strokeStyle = '#4a9a4a';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(5, 480, 25, 60);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 7px Segoe UI';
+        ctx.save();
+        ctx.translate(18, 530);
+        ctx.rotate(-Math.PI/2);
+        ctx.fillText('SECRET', 0, 0);
+        ctx.restore();
+        
+        // Arrow showing stairs go down
+        drawArrow(17, 545, 17, 570, COLORS.secret);
+        ctx.fillStyle = COLORS.secret;
+        ctx.font = '8px Segoe UI';
+        ctx.fillText('STAIRS', 17, 585);
+        ctx.fillText('DOWN', 17, 596);
+
+        // ===== SECRET UNDERGROUND PASSAGE =====
+        
+        // Underground tunnel (dashed to show it's below)
+        ctx.setLineDash([8, 4]);
+        ctx.strokeStyle = COLORS.secret;
+        ctx.lineWidth = 20;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(17, 600);
+        ctx.lineTo(17, 650);
+        ctx.lineTo(1050, 650);
+        ctx.lineTo(1050, 450);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // Tunnel label
+        ctx.fillStyle = COLORS.secret;
+        ctx.font = 'bold 10px Segoe UI';
+        ctx.fillText('~ UNDERGROUND TUNNEL ~', 500, 655);
+        ctx.font = '9px Segoe UI';
+        ctx.fillText('(below main level)', 500, 670);
+        
+        // Cave-in / Rock section at the end
+        ctx.fillStyle = '#5a4a3a';
+        ctx.beginPath();
+        ctx.moveTo(1020, 400);
+        ctx.lineTo(1080, 380);
+        ctx.lineTo(1100, 420);
+        ctx.lineTo(1090, 480);
+        ctx.lineTo(1030, 500);
+        ctx.lineTo(1010, 450);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#3a2a1a';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        
+        // Rock debris
+        ctx.fillStyle = '#6a5a4a';
+        ctx.beginPath();
+        ctx.arc(1040, 430, 15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(1065, 450, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(1050, 470, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(1075, 420, 8, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 10px Segoe UI';
+        ctx.fillText('CAVE-IN', 1055, 440);
+        ctx.fillStyle = COLORS.danger;
+        ctx.font = '8px Segoe UI';
+        ctx.fillText('BLOCKED!', 1055, 455);
+        
+        // Arrow showing tunnel ends here
+        ctx.fillStyle = COLORS.secret;
+        ctx.font = '8px Segoe UI';
+        ctx.fillText('tunnel ends', 1050, 510);
+        ctx.fillText('here', 1050, 522);
+
+        // ===== MAIN HALLWAY (HORIZONTAL - FROM CELLS TO ELEVATOR) =====
+        
+        // Main horizontal hallway
+        drawRoom(200, 200, 800, 80, COLORS.hallway, '', 14);
+        ctx.fillStyle = COLORS.text;
+        ctx.font = 'bold 16px Segoe UI';
+        ctx.fillText('M A I N    H A L L W A Y', 600, 245);
+
+        // Vertical connector to Jake's cell area
+        drawRoom(200, 50, 60, 150, COLORS.hallway, '');
+        
+        // Vertical connector to lower cells
+        drawRoom(200, 280, 60, 280, COLORS.hallway, '');
+
+        // ===== ROOMS ALONG HALLWAY (TOP SIDE) =====
+
+        // GUARD STATION (top, first room)
+        drawRoom(300, 50, 150, 120, COLORS.guardStation, '', 11);
+        ctx.fillStyle = COLORS.text;
+        ctx.font = 'bold 11px Segoe UI';
+        ctx.fillText('GUARD', 375, 90);
+        ctx.fillText('STATION', 375, 105);
+        
+        // Desk & monitors
+        ctx.fillStyle = '#5a5a5a';
+        ctx.fillRect(330, 120, 70, 25);
+        ctx.fillStyle = COLORS.textDim;
+        ctx.font = '7px Segoe UI';
+        ctx.fillText('DESK', 365, 135);
+        drawIcon(340, 80, '[]', 'CCTV');
+        drawIcon(390, 80, '[]', '');
+        
+        ctx.fillStyle = COLORS.danger;
+        ctx.font = 'bold 9px Segoe UI';
+        ctx.fillText('! GUARD !', 375, 155);
+        
+        // Guard has keycard
+        ctx.fillStyle = COLORS.interactive;
+        ctx.font = 'bold 8px Segoe UI';
+        ctx.fillText('HAS KEYCARD', 375, 168);
+        
+        // Danger zone overlay
+        ctx.fillStyle = 'rgba(255, 50, 50, 0.15)';
+        ctx.fillRect(300, 50, 150, 120);
+        
+        drawDoor(355, 170, 40, 10);
+
+        // STORAGE (top, second room)
+        drawRoom(500, 50, 140, 120, COLORS.storage, '', 11);
+        ctx.fillStyle = COLORS.text;
+        ctx.font = 'bold 11px Segoe UI';
+        ctx.fillText('STORAGE', 570, 85);
+        
+        // Crates
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(520, 100, 25, 20);
+        ctx.fillRect(550, 100, 25, 20);
+        ctx.fillRect(580, 100, 25, 20);
+        ctx.fillRect(535, 125, 25, 20);
+        ctx.fillRect(565, 125, 25, 20);
+        
+        ctx.fillStyle = COLORS.textDim;
+        ctx.font = '8px Segoe UI';
+        ctx.fillText('SUPPLIES', 570, 160);
+        
+        drawDoor(550, 170, 40, 10);
+
+        // ===== ROOMS ALONG HALLWAY (BOTTOM SIDE) =====
+
+        // MEDICAL BAY (bottom, first room)
+        drawRoom(300, 310, 150, 120, COLORS.medical, '', 11);
+        ctx.fillStyle = COLORS.text;
+        ctx.font = 'bold 11px Segoe UI';
+        ctx.fillText('MEDICAL', 375, 350);
+        ctx.fillText('BAY', 375, 365);
+        
+        drawIcon(330, 395, '+', 'HEALTH', '#ff6b6b');
+        drawIcon(375, 395, '+', 'MEDKIT', '#ff6b6b');
+        drawIcon(420, 395, 'Rx', 'MEDS', '#6bcb77');
+        
+        drawDoor(355, 300, 40, 10);
+
+        // ARMORY (bottom, second room)
+        drawRoom(500, 310, 160, 130, COLORS.armory, '', 11);
+        ctx.fillStyle = COLORS.text;
+        ctx.font = 'bold 11px Segoe UI';
+        ctx.fillText('ARMORY', 580, 340);
+        
+        // Weapons
+        drawIcon(525, 380, '[=', 'PISTOL');
+        drawIcon(570, 380, '|=', 'RIFLE');
+        drawIcon(615, 380, '||', 'SHOTGUN');
+        
+        // Ammo & armor
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(530, 410, 22, 15);
+        ctx.fillRect(580, 410, 22, 15);
+        ctx.fillStyle = COLORS.textDim;
+        ctx.font = '6px Segoe UI';
+        ctx.fillText('AMMO', 541, 420);
+        ctx.fillText('AMMO', 591, 420);
+        
+        drawIcon(630, 410, '#', 'ARMOR', '#6b9fff');
+        
+        drawDoor(560, 300, 40, 10);
+
+        // ===== ELEVATOR AREA (FAR RIGHT) =====
+        
+        // Elevator lobby
+        drawRoom(850, 170, 120, 140, COLORS.hallway, '', 11);
+        ctx.fillStyle = COLORS.text;
+        ctx.font = 'bold 10px Segoe UI';
+        ctx.fillText('ELEVATOR', 910, 200);
+        ctx.fillText('LOBBY', 910, 215);
+
+        // ELEVATOR
+        drawRoom(870, 230, 80, 70, COLORS.elevator, '', 12);
+        ctx.fillStyle = '#4af';
+        ctx.font = 'bold 11px Segoe UI';
+        ctx.fillText('ELEVATOR', 910, 260);
+        ctx.font = '10px Segoe UI';
+        ctx.fillText('To Level 2', 910, 275);
+        drawArrow(910, 285, 910, 295, '#4af');
+        
+        // Elevator doors (top)
+        ctx.fillStyle = '#555';
+        ctx.fillRect(890, 225, 18, 5);
+        ctx.fillRect(912, 225, 18, 5);
+        
+        // Call button
+        drawIcon(860, 260, 'O', 'CALL', '#4af');
+
+        // ===== ESCAPE ROUTE (DASHED LINE) =====
+        
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = '#4af';
+        ctx.lineWidth = 2;
+        
+        // From Jake's cell through hallway to elevator
+        ctx.beginPath();
+        ctx.moveTo(175, 110);
+        ctx.lineTo(230, 110);
+        ctx.lineTo(230, 240);
+        ctx.lineTo(850, 240);
+        ctx.stroke();
+        
+        ctx.setLineDash([]);
+        
+        // Route label
+        ctx.fillStyle = '#4af';
+        ctx.font = 'bold 10px Segoe UI';
+        ctx.fillText('ESCAPE ROUTE', 700, 260);
+        drawArrow(760, 255, 800, 255, '#4af');
+
+        // ===== ROOM LABELS ON HALLWAY =====
+        
+        ctx.fillStyle = COLORS.textDim;
+        ctx.font = '8px Segoe UI';
+        ctx.fillText('to cells', 230, 185);
+        
+    </script>
+</body>
+</html>

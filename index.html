@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escape Lab 48 - Babylon.js Edition</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+        
+        #renderCanvas {
+            width: 100%;
+            height: 100vh;
+            touch-action: none;
+        }
+        
+        #loadingScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 0.5s;
+        }
+        
+        #loadingScreen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        #loadingScreen h1 {
+            color: #ff6b35;
+            font-size: 48px;
+            text-shadow: 0 0 20px rgba(255, 107, 53, 0.5);
+            margin-bottom: 20px;
+        }
+        
+        #loadingScreen p {
+            color: #888;
+            font-size: 18px;
+        }
+        
+        .loading-bar {
+            width: 300px;
+            height: 6px;
+            background: #333;
+            border-radius: 3px;
+            margin-top: 20px;
+            overflow: hidden;
+        }
+        
+        .loading-bar-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #ff6b35, #f7c531);
+            transition: width 0.3s;
+        }
+        
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 16px;
+            z-index: 10;
+            pointer-events: none;
+        }
+        
+        .hud-item {
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        
+        .health-bar {
+            width: 200px;
+            height: 20px;
+            background: #333;
+            border: 2px solid #555;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .health-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff3333, #ff6666);
+            transition: width 0.3s;
+        }
+        
+        .strength-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ffaa00, #ffdd00);
+            transition: width 0.3s;
+        }
+        
+        #dialogue {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.85);
+            border: 2px solid #ff6b35;
+            border-radius: 10px;
+            padding: 20px 30px;
+            max-width: 700px;
+            color: white;
+            z-index: 20;
+            display: none;
+        }
+        
+        #dialogue .speaker {
+            color: #ff6b35;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        #dialogue .text {
+            line-height: 1.5;
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            color: #888;
+            font-size: 14px;
+            text-align: right;
+            z-index: 10;
+            pointer-events: none;
+        }
+        
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            z-index: 15;
+            pointer-events: none;
+        }
+        
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.8);
+        }
+        
+        #crosshair::before {
+            width: 2px;
+            height: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        
+        #crosshair::after {
+            width: 100%;
+            height: 2px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        #interactPrompt {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, 100px);
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+            padding: 10px 20px;
+            color: white;
+            font-size: 18px;
+            z-index: 15;
+            display: none;
+        }
+        
+        /* Cinematic fade-in overlay */
+        #fadeOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 50;
+            pointer-events: none;
+            opacity: 1;
+            transition: opacity 2s ease-out;
+        }
+        
+        #fadeOverlay.fading {
+            opacity: 0;
+        }
+        
+        #fadeOverlay.hidden {
+            display: none;
+        }
+        
+        /* Click to start prompt - centered on black screen */
+        #clickPrompt {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 55;
+            text-align: center;
+            pointer-events: none;
+        }
+        
+        #clickPrompt h2 {
+            color: #ff6b35;
+            font-size: 32px;
+            text-shadow: 0 0 20px rgba(255, 107, 53, 0.5);
+            margin-bottom: 10px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        #clickPrompt p {
+            color: #888;
+            font-size: 16px;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="renderCanvas"></canvas>
+    
+    <!-- Cinematic fade-in overlay (starts black, fades to reveal scene) -->
+    <div id="fadeOverlay"></div>
+    
+    <!-- Click to start prompt (shows on black screen) -->
+    <div id="clickPrompt" style="display: none;">
+        <h2>CLICK TO BEGIN</h2>
+        <p>Put on headphones for best experience</p>
+    </div>
+    
+    <div id="loadingScreen">
+        <h1>ESCAPE LAB 48</h1>
+        <p>Babylon.js Edition</p>
+        <div class="loading-bar">
+            <div class="loading-bar-fill" id="loadingBar"></div>
+        </div>
+        <p id="loadingText" style="margin-top: 15px; color: #666;">Initializing...</p>
+    </div>
+    
+    <div id="hud">
+        <div class="hud-item">
+            <div>HEALTH</div>
+            <div class="health-bar">
+                <div class="health-bar-fill" id="healthBar" style="width: 100%"></div>
+            </div>
+        </div>
+        <div class="hud-item">
+            <div>STRENGTH <span id="strengthPercent">400%</span></div>
+            <div class="health-bar">
+                <div class="strength-bar-fill" id="strengthBar" style="width: 100%"></div>
+            </div>
+        </div>
+        <div class="hud-item" id="levelDisplay">LEVEL 1: SECURITY CELL</div>
+        <div class="hud-item" id="objectiveDisplay">Objective: Bend the bars and escape!</div>
+        <div class="hud-item" id="enemyCount" style="color: #ff4444;"></div>
+    </div>
+    
+    <div id="crosshair"></div>
+    
+    <div id="interactPrompt">Press [E] to interact</div>
+    
+    <div id="dialogue">
+        <div class="speaker">Jake</div>
+        <div class="text">Sample dialogue text...</div>
+    </div>
+    
+    <div id="instructions">
+        WASD - Move<br>
+        Mouse - Look<br>
+        E - Interact / Bend Bars<br>
+        Space - Jump<br>
+        Shift - Sprint<br>
+        Click - Attack
+    </div>
+    
+    <!-- Babylon.js CDN -->
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+    <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
+    
+    <!-- Havok Physics Engine -->
+    <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js"></script>
+    
+    <!-- Game Scripts -->
+    <script src="js/core/Constants.js"></script>
+    <script src="js/core/GameEngine.js"></script>
+    <script src="js/core/InputManager.js"></script>
+    <script src="js/core/PhysicsManager.js"></script>
+    <script src="js/utils/WorldItems.js"></script>
+    <script src="js/systems/ModelLoader.js"></script>
+    <script src="js/systems/SoundSystem.js"></script>
+    <script src="js/entities/Player.js"></script>
+    <script src="js/entities/NPC.js"></script>
+    <script src="js/entities/JetpackGirl.js"></script>
+    <script src="js/entities/Enemy.js"></script>
+    <script src="js/levels/Level1_Cell.js"></script>
+    <script src="js/levels/Level2_Rescue.js"></script>
+    <script src="js/ui/HUD.js"></script>
+    <script src="js/ui/DialogueSystem.js"></script>
+    <script src="js/ui/Console.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
+
+
